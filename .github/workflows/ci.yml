@@ -14,9 +14,18 @@ concurrency:
 jobs:
   ci:
     uses: tehw0lf/workflows/.github/workflows/build-test-publish.yml@main
+    # A reusable workflow can only use permissions the caller grants it, and a
+    # called job that requests more than is available fails the run at startup
+    # with no log. The jobs behind build-test-publish ask for actions: write
+    # (test-and-build, release-github), attestations: write (test-and-build),
+    # packages: read and security-events: write, so all of them have to be granted
+    # here even though a Lua addon does not exercise every one.
     permissions:
-      id-token: write        # required by the reusable workflow
+      actions: write         # required by test-and-build and release-github
+      attestations: write    # required by test-and-build
       contents: write        # required to create the release and tag
+      packages: write        # required by the called jobs' packages: read
+      id-token: write        # required by the reusable workflow
       security-events: write # required for SARIF uploads from security scanning
     with:
       # Lua is provisioned as a toolchain; `bash` stays the dispatcher, since the
