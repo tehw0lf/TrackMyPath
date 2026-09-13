@@ -40,9 +40,12 @@ jobs:
 
       test: "./test/run.sh"
 
-      # Only main produces the packaged addon, so pull requests run the suite and
-      # stop there. release_github is additionally gated on the event being a
-      # push, so a PR cannot publish even if it built.
+      # Packaged on both pull requests and main, using the same script, so the
+      # packaging path is exercised before it is needed for a release rather than
+      # first running at the moment it matters. Only main publishes:
+      # release_github is gated on the event being a push inside the reusable
+      # workflow, so a PR cannot release even though it built.
+      build_branch: "./build.sh"
       build_main: "./build.sh"
       artifact_path: "dist"
       publish_github_release: true
