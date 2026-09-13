@@ -77,6 +77,28 @@ local function isTrackableLocation()
 	return true
 end
 
+--[[ The player's current position in their own zone's coordinate space, or nil
+     when it cannot be trusted.
+
+     The minimap layer needs this rather than the newest trail sample. Anchoring
+     the minimap trail to the last *sample* makes the whole trail drift relative
+     to the player between samples and then jump when a new sample lands, which
+     reads as the trail sliding and snapping once per sampleInterval.
+
+     Same gating as sample(): the displayed map has to be the player's own zone,
+     otherwise GetPlayerMapPosition reports a projection onto a foreign map.
+]]
+function TMP:GetLivePlayerPosition()
+	if not playerMapID then return nil end
+	if TMP:GetDisplayedMapID() ~= playerMapID then return nil end
+	if not isTrackableLocation() then return nil end
+
+	local x, y = GetPlayerMapPosition("player")
+	if not x or not y or (x == 0 and y == 0) then return nil end
+	if x < 0 or x > 1 or y < 0 or y > 1 then return nil end
+	return x, y
+end
+
 --[[ The area ID currently drawn on the world map. Read-only, no side effects.
 ]]
 function TMP:GetDisplayedMapID()

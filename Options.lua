@@ -14,6 +14,18 @@ local function print_(msg)
 	DEFAULT_CHAT_FRAME:AddMessage("|cff33ff99TrackMyPath|r: " .. tostring(msg))
 end
 
+--[[ Apply a settings change to both render layers.
+
+     The minimap layer caches the state its last frame was built from so it can
+     skip redundant redraws; a settings change is exactly the kind of thing that
+     cache cannot see, so it has to be dropped explicitly.
+]]
+local function redraw()
+	TMP:InvalidateMinimap()
+	TMP:RefreshWorldMap()
+	TMP:RefreshMinimap()
+end
+
 --------------------------------------------------------------------------------
 -- Slash commands
 --------------------------------------------------------------------------------
@@ -59,7 +71,7 @@ local function handler(input)
 
 	elseif cmd == "off" then
 		db.enabled = false
-		TMP:RefreshWorldMap()
+		redraw()
 		TMP:ApplyMinimapVisibility()
 		print_("tracking disabled")
 
@@ -87,7 +99,7 @@ local function handler(input)
 			print_("size needs a value between 2 and 16")
 		else
 			db.dotSize = v
-			TMP:RefreshWorldMap()
+			redraw()
 			print_(string.format("dot size set to %d", v))
 		end
 
@@ -98,19 +110,18 @@ local function handler(input)
 
 	elseif cmd == "worldmap" then
 		db.showWorldMap = not db.showWorldMap
-		TMP:RefreshWorldMap()
+		redraw()
 		print_("world map trail " .. (db.showWorldMap and "on" or "off"))
 
 	elseif cmd == "clear" then
 		TMP.Trail:Clear()
-		TMP:RefreshWorldMap()
-		TMP:RefreshMinimap()
+		redraw()
 		print_("trail cleared")
 
 	elseif cmd == "reset" then
 		TMP:ResetConfig()
 		TMP:ApplyMinimapVisibility()
-		TMP:RefreshWorldMap()
+		redraw()
 		print_("settings restored to defaults")
 
 	elseif cmd == "status" then
@@ -201,13 +212,13 @@ function TMP:InitOptions()
 		function() return db.enabled end,
 		function(v)
 			db.enabled = v
-			TMP:RefreshWorldMap()
+			redraw()
 			TMP:ApplyMinimapVisibility()
 		end)
 
 	makeCheck(panel, "Show on world map", -74,
 		function() return db.showWorldMap end,
-		function(v) db.showWorldMap = v; TMP:RefreshWorldMap() end)
+		function(v) db.showWorldMap = v; redraw() end)
 
 	makeCheck(panel, "Show on minimap (approximate)", -102,
 		function() return db.showMinimap end,
@@ -223,7 +234,7 @@ function TMP:InitOptions()
 
 	makeSlider(panel, "Size", 2, 16, 1, -250, "Dot size: %d px",
 		function() return db.dotSize end,
-		function(v) db.dotSize = v; TMP:RefreshWorldMap() end)
+		function(v) db.dotSize = v; redraw() end)
 
 	makeSlider(panel, "MinimapSize", 2, 12, 1, -300, "Minimap dot size: %d px",
 		function() return db.minimapDotSize end,
@@ -248,7 +259,7 @@ function TMP:InitOptions()
 			local r, g, b = ColorPickerFrame:GetColorRGB()
 			db.color.r, db.color.g, db.color.b = r, g, b
 			swatch:SetVertexColor(r, g, b)
-			TMP:RefreshWorldMap()
+			redraw()
 		end
 		local prev = { db.color.r, db.color.g, db.color.b }
 		ColorPickerFrame.func = apply
@@ -257,7 +268,7 @@ function TMP:InitOptions()
 		ColorPickerFrame.cancelFunc = function()
 			db.color.r, db.color.g, db.color.b = prev[1], prev[2], prev[3]
 			swatch:SetVertexColor(prev[1], prev[2], prev[3])
-			TMP:RefreshWorldMap()
+			redraw()
 		end
 		ColorPickerFrame:SetColorRGB(db.color.r, db.color.g, db.color.b)
 		ColorPickerFrame:Hide() -- force OnShow to fire even if already shown
@@ -271,8 +282,7 @@ function TMP:InitOptions()
 	clearBtn:SetText("Clear trail")
 	clearBtn:SetScript("OnClick", function()
 		TMP.Trail:Clear()
-		TMP:RefreshWorldMap()
-		TMP:RefreshMinimap()
+		redraw()
 	end)
 
 	local resetBtn = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
@@ -283,7 +293,7 @@ function TMP:InitOptions()
 	resetBtn:SetScript("OnClick", function()
 		TMP:ResetConfig()
 		TMP:ApplyMinimapVisibility()
-		TMP:RefreshWorldMap()
+		redraw()
 		-- Rebuild so widgets reflect the restored values.
 		print_("settings reset - /reload to refresh this panel")
 	end)

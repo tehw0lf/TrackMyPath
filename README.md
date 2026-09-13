@@ -78,7 +78,7 @@ It records automatically once enabled. Open the world map to see the trail.
   deliberately never calls `SetMapToCurrentZone()` while the map is open, because
   that would yank the view away from you mid-browse.
 
-## Known limitation: the minimap layer
+## The minimap layer
 
 The minimap trail is **off by default and is an approximation.** Positioning
 something on the 3.3.5a minimap requires knowing the current zone's size in
@@ -98,6 +98,26 @@ same coordinate space the API reports.
 To make the minimap exact, drop in Astrolabe and replace
 `estimateYardsPerUnit()` in `Minimap.lua` with a table lookup. Nothing else
 needs to change.
+
+### Motion
+
+The minimap trail is anchored on the player's **live** position, so it sits still
+in the world while you move through it. Three things keep it from feeling hectic:
+
+- **Live anchoring.** An earlier version anchored on the newest recorded *sample*
+  instead. Between samples the player moved but the anchor did not, so the whole
+  trail slid relative to the player and then snapped back when the next sample
+  landed — once per `sampleInterval`. The trail now moves rigidly with the world.
+- **Rotation easing.** With `rotateMinimap` on, the facing angle is eased towards
+  its target rather than read raw each frame, so small camera movements do not
+  swing the trail around. Easing takes the shortest arc, so crossing north does
+  not spin it a full turn.
+- **Edge fading.** Dots dissolve across the outer 20% of the minimap radius
+  instead of popping off at the boundary.
+
+Redraws are also skipped entirely when the anchor, facing, zoom and sample count
+are all unchanged — with a time bound so the fade still animates while standing
+still.
 
 ## Performance
 
@@ -128,9 +148,14 @@ runs Lua 5.1, so the suite is run against `lua5.1`.
 ./test/run.sh
 ```
 
-Covers syntax on every file plus 96 assertions: the FIFO and ageing model,
+Covers syntax on every file plus 116 assertions: the FIFO and ageing model,
 instance/cosmic/foreign-zone rejection, the stationary-player case, render-layer
 pooling and the alpha gradient, all slash commands, and a 30-minute stress run.
+
+`test_minimap.lua` pins the motion behaviour specifically: that the trail shifts
+rigidly with the player rather than drifting and snapping, that rotation easing
+takes the short way round a wrap, that dots fade towards the rim, and that
+standing still skips redraws without freezing the fade.
 
 ## Layout
 

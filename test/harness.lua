@@ -19,7 +19,12 @@ local function newFrame()
 	function f:GetScript(k) return self.scripts[k] end
 	function f:RegisterEvent() end
 	function f:UnregisterEvent() end
-	function f:SetPoint() end
+	-- Record the offsets so tests can assert on placement. The real client
+	-- signature is SetPoint(point, relativeTo, relativePoint, x, y), and the
+	-- addon always uses that 5-argument form.
+	function f:SetPoint(point, relativeTo, relativePoint, x, y)
+		self.px, self.py = x, y
+	end
 	function f:ClearAllPoints() end
 	function f:SetAllPoints() end
 	function f:SetWidth(v) self.w = v end
@@ -102,8 +107,17 @@ function _G.SetMapToCurrentZone() end
 function _G.GetPlayerMapPosition(unit) return px, py end
 function _G.IsInInstance() return inInstance end
 function _G.IsIndoors() return false end
-function _G.GetCVar(k) return "0" end
-function _G.GetPlayerFacing() return 0 end
+local cvars = { rotateMinimap = "0" }
+function _G.GetCVar(k) return cvars[k] or "0" end
+function _G.SetCVarStub(k, v) cvars[k] = v end
+
+local facing = 0
+function _G.GetPlayerFacing() return facing end
+function _G.setFacing(f) facing = f end
+
+-- Minimap zoom is settable so the redraw-skip logic can be exercised.
+function _G.setMinimapZoom(z) _G.Minimap.zoom = z end
+_G.Minimap.GetZoom = function(self) return self.zoom or 3 end
 
 function setMap(area, continent, zone)
 	mapAreaID, mapContinent, mapZone = area, continent, zone

@@ -24,7 +24,7 @@ for f in *.lua; do
 	fi
 done
 
-for t in test/test_trail.lua test/test_integration.lua test/test_stress.lua; do
+for t in test/test_trail.lua test/test_integration.lua test/test_minimap.lua test/test_stress.lua; do
 	echo
 	echo "== $t =="
 	if ! "$LUA" "$t"; then

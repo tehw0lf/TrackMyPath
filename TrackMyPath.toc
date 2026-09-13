@@ -2,7 +2,7 @@
 ## Title: TrackMyPath
 ## Notes: Draws the path you have walked onto the world map. Trail fades out over time.
 ## Author: tehw0lf
-## Version: 0.1.0
+## Version: 0.1.1
 ## SavedVariables: TrackMyPathDB
 ## X-Category: Map
 

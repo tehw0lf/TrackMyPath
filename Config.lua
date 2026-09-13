@@ -11,7 +11,7 @@ TrackMyPath = TrackMyPath or {}
 local TMP = TrackMyPath
 
 TMP.ADDON_NAME = ADDON
-TMP.VERSION = "0.1.0"
+TMP.VERSION = "0.1.1"
 
 -- Defaults. Kept flat on purpose: easier to migrate and to reset individually.
 TMP.defaults = {
