@@ -1,0 +1,37 @@
+name: ci
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+# A newer push to the same ref makes an in-flight run obsolete.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ci:
+    uses: tehw0lf/workflows/.github/workflows/build-test-publish.yml@main
+    permissions:
+      id-token: write        # required by the reusable workflow
+      contents: write        # required to create the release and tag
+      security-events: write # required for SARIF uploads from security scanning
+    with:
+      # Lua is provisioned as a toolchain; `bash` stays the dispatcher, since the
+      # tool input is prefixed onto every script command.
+      tool: bash
+      enable_lua: true
+      # WoW 3.3.5a runs Lua 5.1. Testing against a newer interpreter would accept
+      # syntax the game rejects, so the version is pinned exactly.
+      lua_version: "5.1.5"
+
+      test: "./test/run.sh"
+
+      # Only main produces the packaged addon, so pull requests run the suite and
+      # stop there. release_github is additionally gated on the event being a
+      # push, so a PR cannot publish even if it built.
+      build_main: "./build.sh"
+      artifact_path: "dist"
+      publish_github_release: true

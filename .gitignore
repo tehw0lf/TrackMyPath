@@ -6,3 +6,6 @@ luac.out
 *~
 .*.swp
 .DS_Store
+
+# Build output from build.sh
+dist/

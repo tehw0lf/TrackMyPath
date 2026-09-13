@@ -142,11 +142,16 @@ per-zone buckets are fully reclaimed.
 ## Tests
 
 The addon logic is tested outside the game against a stubbed WoW API. WoW 3.3.5a
-runs Lua 5.1, so the suite is run against `lua5.1`.
+runs Lua 5.1, so the suite runs against 5.1 — a newer interpreter would accept
+syntax the game rejects.
 
 ```bash
 ./test/run.sh
 ```
+
+The runner probes for both `lua5.1`/`luac5.1` (distro packages) and `lua`/`luac`
+(what CI installs), and falls back to `loadfile` for the syntax pass if `luac` is
+missing. Override with `LUA=/path/to/lua`.
 
 Covers syntax on every file plus 116 assertions: the FIFO and ageing model,
 instance/cosmic/foreign-zone rejection, the stationary-player case, render-layer
@@ -156,6 +161,32 @@ pooling and the alpha gradient, all slash commands, and a 30-minute stress run.
 rigidly with the player rather than drifting and snapping, that rotation easing
 takes the short way round a wrap, that dots fade towards the rim, and that
 standing still skips redraws without freezing the fade.
+
+## Building
+
+```bash
+./build.sh
+```
+
+Writes `dist/TrackMyPath-<version>.zip`, packaged so that unzipping it into
+`Interface/AddOns/` produces the correctly named folder. Tests and CI config are
+not shipped. The script fails if the `.toc` lists a file that does not exist, and
+warns about Lua files that exist but are not listed — those load silently as
+nothing in-game.
+
+## CI
+
+`.github/workflows/ci.yml` calls the reusable workflow from
+[`tehw0lf/workflows`](https://github.com/tehw0lf/workflows):
+
+- **Pull requests** run the test suite and stop.
+- **Push to main** additionally packages the addon and publishes a GitHub release
+  tagged from the `## Version:` field of the `.toc`.
+
+The version lives in two places — `TrackMyPath.toc`, which drives the release
+tag, and `TMP.VERSION` in `Config.lua`, which the options panel displays. They
+must be bumped together, and the test suite fails if they disagree, so the drift
+cannot reach a release unnoticed.
 
 ## Layout
 
@@ -168,6 +199,8 @@ WorldMap.lua        World map render layer (exact)
 Minimap.lua         Minimap render layer (approximate, off by default)
 Options.lua         Slash commands and options panel
 test/               Lua 5.1 test suite with a stubbed WoW API
+build.sh            Packages dist/TrackMyPath-<version>.zip
+.github/workflows/  CI via tehw0lf/workflows
 ```
 
 ## Licence

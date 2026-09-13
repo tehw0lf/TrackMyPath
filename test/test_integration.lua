@@ -295,6 +295,27 @@ eq("keeps existing value", TMP.db.fadeTime, 123)
 eq("fills missing default", TMP.db.dotSize, 6)
 check("fills nested colour table", TMP.db.color and TMP.db.color.g == 1.0)
 
+print("== version is consistent between the TOC and Config.lua ==")
+--[[ The version lives in two places: TrackMyPath.toc drives the CI release tag,
+     and TMP.VERSION is what the options panel shows. They drift silently, so the
+     suite compares them rather than trusting a note in the README.
+]]
+do
+	local toc = io.open("TrackMyPath.toc", "r")
+	if not toc then
+		check("TrackMyPath.toc is readable", false, "could not open it")
+	else
+		local tocVersion
+		for line in toc:lines() do
+			tocVersion = line:match("^##%s*[Vv]ersion:%s*(%S+)")
+			if tocVersion then break end
+		end
+		toc:close()
+		check("TOC declares a version", tocVersion ~= nil)
+		eq("TOC and TMP.VERSION agree", TMP.VERSION, tocVersion)
+	end
+end
+
 print("")
 print(string.format("RESULT: %d passed, %d failed", pass, fail))
 if fail > 0 then os.exit(1) end
