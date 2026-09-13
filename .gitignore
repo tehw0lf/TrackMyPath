@@ -1,0 +1,8 @@
+# Lua bytecode from luac -p / -o
+*.luac
+luac.out
+
+# Editor / OS noise
+*~
+.*.swp
+.DS_Store
