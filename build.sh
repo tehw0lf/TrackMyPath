@@ -9,6 +9,15 @@ set -euo pipefail
 
 cd "$(dirname "$0")"
 
+# zip is present on GitHub's ubuntu images and on most desktops, but failing on a
+# bare "command not found" three steps into a CI run is a poor diagnostic.
+for dep in zip unzip; do
+	if ! command -v "$dep" >/dev/null 2>&1; then
+		echo "error: '$dep' is required but not installed" >&2
+		exit 1
+	fi
+done
+
 ADDON="TrackMyPath"
 DIST="dist"
 STAGE="$(mktemp -d)"
