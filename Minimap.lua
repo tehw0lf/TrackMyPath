@@ -3,22 +3,27 @@
 
      IMPORTANT LIMITATION, please read before trusting this layer:
 
-     Placing something on the 3.3.5a minimap correctly requires knowing how many
-     yards wide the current zone is, because minimap distances are in yards while
-     GetPlayerMapPosition returns 0-1 fractions of the zone. The real answer is a
-     zone dimension database (Astrolabe / LibMapData / HereBeDragons ship one with
-     several hundred entries). This addon does not bundle one.
+     Placing something on the 3.3.5a minimap correctly requires knowing the
+     current zone's size in yards, because minimap distances are in yards while
+     GetPlayerMapPosition returns 0-1 fractions of the zone. There are two
+     separate problems in that sentence, and they have different answers.
 
-     Instead the scale is calibrated at runtime: the minimap zoom level gives the
-     view radius in yards, and a per-zone yards-per-map-unit factor is estimated
-     from the player's own recorded movement. That is good enough for "which way
-     did I come from" at a glance, which is the farming use case, but it is an
-     approximation and it needs a few seconds of movement in a new zone before it
-     settles.
+     1. ABSOLUTE DISTANCE - not solved. How far one map unit reaches in yards
+        cannot be derived without either a zone dimension database or a known run
+        speed. Astrolabe, LibMapData and HereBeDragons each ship such a database,
+        but their data is not under a licence compatible with this addon's MIT,
+        and the tables are the substance of those libraries rather than an
+        incidental detail - so they are not copied here. A single mid-range zone
+        size is assumed instead, leaving distance off by up to ~30%.
 
-     If you want this pixel-accurate, the correct fix is to drop in Astrolabe and
-     replace estimateYardsPerUnit() with a table lookup. The rest of this file
-     stays as is.
+     2. AXIS STRETCH - solved, see the calibration block below. WotLK zones are
+        not square, and x and y are each fractions of their own axis, so drawing
+        both at one scale skews direction as well as distance. The height/width
+        RATIO is recoverable from the player's own movement alone, because run
+        speed scales both axes equally and cancels out. No external data needed.
+
+     The ratio is measured once per zone and then locked permanently, so the
+     trail never shifts underfoot after calibration.
 ]]
 
 local TMP = TrackMyPath
@@ -62,6 +67,7 @@ local EDGE_FADE_START = 0.8
 local smoothFacing = nil
 local lastDrawX, lastDrawY, lastDrawFacing = nil, nil, nil
 local lastDrawZoom, lastDrawMapID, lastDrawCount = nil, nil, nil
+local lastDrawAspect = nil
 local lastDrawTime = nil
 
 local pool = {}
@@ -71,6 +77,150 @@ local updater = nil
 
 -- Per-zone estimate of how many yards one map unit (0-1) spans.
 local yardsPerUnit = {}
+
+--[[ Aspect-ratio calibration.
+
+     The distance problem above is unfixable without a zone dimension database.
+     The *stretch* problem is not, and it is the one that also breaks direction.
+
+     WotLK zones are not square. Because x and y are each a 0-1 fraction of their
+     own axis, one map unit of x and one map unit of y are different numbers of
+     yards. Drawing both with a single scale squashes the trail along one axis:
+     in Icecrown (roughly 3:2) a dot 45 degrees off is drawn about 34 degrees off.
+
+     What makes this fixable without any external data is that only the RATIO is
+     needed, not the absolute size. Over one movement step:
+
+         dx_yards = dx_units * zoneWidth
+         dy_yards = dy_units * zoneHeight
+
+     Run speed multiplies both axes equally, so it cancels out of dy/dx entirely.
+     Mounts, buffs, swimming and form changes are therefore all irrelevant here -
+     which is exactly what made the absolute-speed approach in the header fragile
+     and what makes this one robust.
+
+     Recovering the ratio needs the player to move both north/south and east/west.
+     A single straight run gives no information about the other axis, so evidence
+     is accumulated as summed squared components across many steps and the ratio
+     is taken only once BOTH axes have seen real movement. Summing squares rather
+     than averaging per-step ratios keeps a near-axis-aligned step (where one
+     component is nearly zero and its ratio is wild) from dominating.
+
+     Once locked the value is written to db.zoneAspect[mapID] and never revisited:
+     the accumulator is discarded and every later frame is a plain table lookup.
+     This is deliberate. A continuously refined estimate would shift the whole
+     trail underfoot on every update, which is the same class of bug that live
+     anchoring and facing easing were introduced to remove.
+]]
+
+-- Squared map-unit movement per zone, accumulated until the ratio locks.
+-- zoneEvidence[mapID] = { sx = <sum dx^2>, sy = <sum dy^2>, n = <steps> }
+local zoneEvidence = {}
+-- Last sample position seen per zone, to derive movement steps.
+local lastCalX, lastCalY, lastCalMap = nil, nil, nil
+
+-- Steps required before a ratio may be locked. At the default 1s sample interval
+-- this is a few seconds of ordinary movement.
+local CALIBRATION_MIN_STEPS = 12
+--[[ Both axes must have accumulated at least this share of the total squared
+     movement. Running due east gives sy ~= 0 and a meaningless ratio, so the
+     lock waits until the path has enough of a bend in it. 0.15 accepts ordinary
+     farming movement while rejecting a straight flight path.
+]]
+local CALIBRATION_MIN_AXIS_SHARE = 0.15
+-- Clamp: no WotLK zone is anywhere near this elongated. Guards against a bad
+-- measurement from teleports or an unusual custom-server map.
+local ASPECT_MIN, ASPECT_MAX = 0.25, 4.0
+
+--[[ Feed one position into the current zone's calibration.
+     Cheap and a no-op once the zone is locked, so it is safe to call per sample.
+]]
+function TMP:CalibrateAspect(mapID, x, y)
+	local db = self.db
+	if not db or not mapID then return end
+	-- Already locked: nothing to do, ever again.
+	if db.zoneAspect[mapID] then return end
+
+	-- A zone change makes the previous position meaningless as a step origin.
+	if lastCalMap ~= mapID then
+		lastCalMap, lastCalX, lastCalY = mapID, x, y
+		return
+	end
+	if not lastCalX then
+		lastCalX, lastCalY = x, y
+		return
+	end
+
+	local dx, dy = x - lastCalX, y - lastCalY
+	lastCalX, lastCalY = x, y
+
+	-- Ignore steps that are pure noise or an obvious discontinuity (loading
+	-- screen, summon, hearthstone) rather than walking.
+	local distSq = dx * dx + dy * dy
+	if distSq < 1e-10 or distSq > 0.01 then return end
+
+	local ev = zoneEvidence[mapID]
+	if not ev then
+		ev = { sx = 0, sy = 0, n = 0 }
+		zoneEvidence[mapID] = ev
+	end
+	ev.sx = ev.sx + dx * dx
+	ev.sy = ev.sy + dy * dy
+	ev.n = ev.n + 1
+
+	if ev.n < CALIBRATION_MIN_STEPS then return end
+
+	local total = ev.sx + ev.sy
+	if total <= 0 then return end
+	-- Both axes need real representation before the ratio means anything.
+	if (ev.sx / total) < CALIBRATION_MIN_AXIS_SHARE then return end
+	if (ev.sy / total) < CALIBRATION_MIN_AXIS_SHARE then return end
+
+	--[[ The player traverses the zone at one speed in yards, so over many steps
+	     the summed yard-distance on each axis reflects how that axis maps to
+	     yards. sqrt(sx/sy) in map units is the inverse of the height/width ratio.
+	]]
+	local aspect = math.sqrt(ev.sx / ev.sy)
+	if aspect < ASPECT_MIN or aspect > ASPECT_MAX then
+		-- Implausible: discard the evidence and start over rather than lock in
+		-- a bad value permanently.
+		zoneEvidence[mapID] = nil
+		return
+	end
+
+	-- Lock it in and drop the accumulator. From here the value is a constant.
+	db.zoneAspect[mapID] = aspect
+	zoneEvidence[mapID] = nil
+	self:InvalidateMinimap()
+end
+
+-- Locked height/width ratio for a zone, or 1 (square) while still measuring.
+local function aspectFor(db, mapID)
+	return db.zoneAspect and db.zoneAspect[mapID] or 1
+end
+
+--[[ Calibration state for a zone, for the status readout and tests.
+     Returns "locked", aspect | "measuring", steps | "idle", 0
+]]
+function TMP:GetAspectState(mapID)
+	local db = self.db
+	if db and db.zoneAspect and db.zoneAspect[mapID] then
+		return "locked", db.zoneAspect[mapID]
+	end
+	local ev = zoneEvidence[mapID]
+	if ev then return "measuring", ev.n end
+	return "idle", 0
+end
+
+-- Drop a locked ratio so the zone is measured again. Used by /tmp calibrate.
+function TMP:ResetAspect(mapID)
+	if self.db and self.db.zoneAspect then
+		self.db.zoneAspect[mapID] = nil
+	end
+	zoneEvidence[mapID] = nil
+	lastCalMap, lastCalX, lastCalY = nil, nil, nil
+	self:InvalidateMinimap()
+end
 
 local function acquire(index)
 	local tex = pool[index]
@@ -190,8 +340,18 @@ function TMP:RefreshMinimap()
 	local mapW = Minimap:GetWidth()
 	-- Pixels per yard on the current minimap.
 	local pixPerYard = (mapW / 2) / radius
-	-- Pixels per map unit.
+	-- Pixels per map unit along x.
 	local pixPerUnit = zoneYards * pixPerYard
+
+	--[[ y is scaled separately by the measured height/width ratio. Without this,
+	     one map unit of y is treated as the same number of yards as one map unit
+	     of x, which squashes the trail along y in any non-square zone and skews
+	     every direction that is not exactly N/S/E/W.
+
+	     1 while a zone is still calibrating, i.e. identical to the old behaviour.
+	]]
+	local aspect = aspectFor(db, mapID)
+	local pixPerUnitY = pixPerUnit * aspect
 
 	-- Minimap rotation has to be undone by hand: when rotateMinimap is on, the
 	-- minimap's "up" is the player's facing, not north.
@@ -227,6 +387,7 @@ function TMP:RefreshMinimap()
 		and lastDrawMapID == mapID
 		and lastDrawCount == count
 		and lastDrawZoom == zoom
+		and lastDrawAspect == aspect
 		and lastDrawTime and (now - lastDrawTime) < bucketPeriod
 		and math.abs(anchorX - lastDrawX) < ANCHOR_EPSILON
 		and math.abs(anchorY - lastDrawY) < ANCHOR_EPSILON
@@ -235,6 +396,7 @@ function TMP:RefreshMinimap()
 	end
 	lastDrawX, lastDrawY, lastDrawFacing = anchorX, anchorY, facing
 	lastDrawZoom, lastDrawMapID, lastDrawCount = zoom, mapID, count
+	lastDrawAspect = aspect
 	lastDrawTime = now
 
 	-- Cull anything beyond the visible circle.
@@ -250,7 +412,7 @@ function TMP:RefreshMinimap()
 		-- Offset of this sample from the player, in map units.
 		-- Map y grows downward (south), so north is -dy.
 		local dx = (s.x - anchorX) * pixPerUnit
-		local dy = (s.y - anchorY) * pixPerUnit
+		local dy = (s.y - anchorY) * pixPerUnitY
 
 		-- Screen offset: east is +x, north is +y on the minimap.
 		local ox, oy = dx, -dy
@@ -324,6 +486,7 @@ end
 function TMP:InvalidateMinimap()
 	lastDrawX, lastDrawY, lastDrawFacing = nil, nil, nil
 	lastDrawZoom, lastDrawMapID, lastDrawCount = nil, nil, nil
+	lastDrawAspect = nil
 	lastDrawTime = nil
 	smoothFacing = nil
 end
