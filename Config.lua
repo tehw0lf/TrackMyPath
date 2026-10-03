@@ -11,7 +11,7 @@ TrackMyPath = TrackMyPath or {}
 local TMP = TrackMyPath
 
 TMP.ADDON_NAME = ADDON
-TMP.VERSION = "0.1.4"
+TMP.VERSION = "0.1.5"
 
 -- Defaults. Kept flat on purpose: easier to migrate and to reset individually.
 TMP.defaults = {
@@ -45,20 +45,6 @@ TMP.defaults = {
 
 	-- Minimap dots are smaller by default; the minimap is a busy, small surface.
 	minimapDotSize = 4,
-
-	--[[ Measured height/width ratio per map area ID, e.g. zoneAspect[486] = 0.667.
-
-	     WotLK zones are not square (Icecrown is roughly 3:2), but x and y from
-	     GetPlayerMapPosition are both 0-1 fractions of their own axis. Drawing
-	     both with one scale therefore stretches the minimap trail along one axis.
-
-	     The ratio is measured from the player's own movement and then locked for
-	     good, so the trail never shifts underfoot after calibration. Persisted so
-	     a relog does not re-enter the measuring state. Absolute zone size is NOT
-	     stored: it cannot be derived without knowing run speed, and it is not
-	     needed for the ratio.
-	]]
-	zoneAspect = {},
 }
 
 -- Copy any missing default into the live DB. Runs on every load so new options
@@ -83,11 +69,8 @@ function TMP:InitConfig()
 end
 
 -- Reset every setting back to defaults.
--- This also drops every locked zone aspect ratio, so zones are measured again.
 function TMP:ResetConfig()
 	TrackMyPathDB = {}
 	applyDefaults(TrackMyPathDB, self.defaults)
 	self.db = TrackMyPathDB
-	-- Calibration still in progress lives in Minimap.lua, outside the saved table.
-	if self.DiscardAspectEvidence then self:DiscardAspectEvidence() end
 end
