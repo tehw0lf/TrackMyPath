@@ -11,7 +11,7 @@ TrackMyPath = TrackMyPath or {}
 local TMP = TrackMyPath
 
 TMP.ADDON_NAME = ADDON
-TMP.VERSION = "0.1.3"
+TMP.VERSION = "0.1.4"
 
 -- Defaults. Kept flat on purpose: easier to migrate and to reset individually.
 TMP.defaults = {
@@ -88,4 +88,6 @@ function TMP:ResetConfig()
 	TrackMyPathDB = {}
 	applyDefaults(TrackMyPathDB, self.defaults)
 	self.db = TrackMyPathDB
+	-- Calibration still in progress lives in Minimap.lua, outside the saved table.
+	if self.DiscardAspectEvidence then self:DiscardAspectEvidence() end
 end

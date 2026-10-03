@@ -146,7 +146,7 @@ local function sample(now)
 	-- Feed the minimap's zone aspect-ratio calibration. This is the only place a
 	-- position is known to be both trustworthy and in the player's own zone. A
 	-- no-op once the zone's ratio has locked.
-	TMP:CalibrateAspect(playerMapID, x, y)
+	TMP:CalibrateAspect(playerMapID, x, y, GetPlayerFacing())
 end
 
 frame:SetScript("OnUpdate", function(self, elapsed)

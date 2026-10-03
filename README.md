@@ -100,9 +100,10 @@ roughly ±30% in unusually large or small zones.
 because x and y are each fractions of *their own* axis, drawing both at one scale
 squashed the trail along one axis and skewed every direction that was not exactly
 N/S/E/W. The addon now measures each zone's height/width ratio from your own
-movement. This needs no external data at all: run speed scales both axes equally,
-so it cancels out of the ratio entirely — mounts, buffs and swimming make no
-difference.
+movement and the direction your character faces. This needs no external data at
+all: run speed scales both axes equally and cancels out, so mounts, buffs and
+swimming make no difference, and because the facing is known the result does not
+depend on which way you happened to run either.
 
 Consequence: direction is now correct, distance is still approximate. Good enough
 for "which way did I come from", not good enough to navigate by.
@@ -112,9 +113,12 @@ same coordinate space the API reports.
 
 ### Zone shape calibration
 
-A new zone needs a few seconds of ordinary movement before its shape is known,
-and that movement has to bend — running in a dead straight line tells the addon
-nothing about the other axis, so it deliberately waits rather than guessing.
+A new zone needs a few seconds of ordinary movement before its shape is known.
+Running due north/south or due east/west tells the addon nothing about the other
+axis, so it deliberately waits rather than guessing; any other heading works,
+including one long diagonal run. Steps where you did not move the way you face
+(strafing, backpedalling, turning mid-step) are ignored, and the measurement only
+locks once its own steps agree with each other.
 
 **The measurement is taken once and then locked permanently.** It is never
 refined afterwards. This is deliberate: an estimate that kept adjusting itself
@@ -197,9 +201,12 @@ standing still skips redraws without freezing the fade.
 
 `test_calibration.lua` pins the zone-shape measurement: that a known 3:2 zone is
 recovered from simulated movement, that a straight-line run refuses to lock, that
-a locked ratio never changes no matter how much contradictory movement follows,
-that a locked zone renders bit-identical frames, and that absurd measurements are
-rejected rather than baked in.
+that a path leaning heavily one way (mostly east in a square zone) still measures
+the zone and not the path, that strafing and backpedalling are ignored, that steps
+without a facing collect nothing, that `/tmp reset` discards a measurement in
+progress, that a locked ratio never changes no matter how much contradictory
+movement follows, that a locked zone renders bit-identical frames, and that absurd
+measurements are rejected rather than baked in.
 
 ## Building
 
