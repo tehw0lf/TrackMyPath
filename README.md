@@ -88,9 +88,11 @@ database — Astrolabe, LibMapData and HereBeDragons each ship one with several
 hundred entries. This addon does not bundle one, and instead assumes a typical
 zone size.
 
-Consequence: minimap dots are placed correctly in *direction*, but their
-*distance* from you can be off by roughly ±30% in unusually large or small zones.
-Good enough for "which way did I come from", not good enough to navigate by.
+Consequence: the minimap uses one scale for both axes, so distances can be off by
+roughly ±30% in unusually large or small zones, and in zones that are not square
+(Icecrown is about 3:2) the *direction* of a dot is skewed as well, not just its
+distance. Good enough for "roughly which way did I come from", not good enough to
+navigate by.
 
 The world map layer has no such problem — it is exact, because it works in the
 same coordinate space the API reports.
@@ -153,7 +155,7 @@ The runner probes for both `lua5.1`/`luac5.1` (distro packages) and `lua`/`luac`
 (what CI installs), and falls back to `loadfile` for the syntax pass if `luac` is
 missing. Override with `LUA=/path/to/lua`.
 
-Covers syntax on every file plus 116 assertions: the FIFO and ageing model,
+Covers syntax on every file plus 118 assertions: the FIFO and ageing model,
 instance/cosmic/foreign-zone rejection, the stationary-player case, render-layer
 pooling and the alpha gradient, all slash commands, and a 30-minute stress run.
 
