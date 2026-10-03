@@ -52,7 +52,6 @@ It records automatically once enabled. Open the world map to see the trail.
 /tmp worldmap        toggle the world map trail
 /tmp minimap         toggle the minimap trail (see caveat below)
 /tmp clear           erase the recorded trail
-/tmp calibrate       re-measure the current zone's shape (see below)
 /tmp reset           restore default settings
 /tmp status          show current state
 ```
@@ -84,57 +83,23 @@ It records automatically once enabled. Open the world map to see the trail.
 The minimap trail is **off by default and is an approximation.** Positioning
 something on the 3.3.5a minimap requires knowing the current zone's size in
 yards, because minimap distances are in yards while `GetPlayerMapPosition`
-returns 0-1 fractions of the zone.
+returns 0-1 fractions of the zone. Getting that right needs a zone dimension
+database — Astrolabe, LibMapData and HereBeDragons each ship one with several
+hundred entries. This addon does not bundle one, and instead assumes a typical
+zone size.
 
-That is really two problems, and they have different answers.
-
-**Distance — still approximate.** How many yards one map unit spans cannot be
-derived without either a zone dimension database or a known run speed. Astrolabe,
-LibMapData and HereBeDragons each ship such a database, but their data is not
-under a licence compatible with this addon's MIT, and those tables *are* the
-substance of those libraries rather than an incidental detail — so they are not
-copied here. A mid-range zone size is assumed instead, leaving distance off by
-roughly ±30% in unusually large or small zones.
-
-**Zone shape — fixed.** WotLK zones are not square (Icecrown is about 3:2), and
-because x and y are each fractions of *their own* axis, drawing both at one scale
-squashed the trail along one axis and skewed every direction that was not exactly
-N/S/E/W. The addon now measures each zone's height/width ratio from your own
-movement and the direction your character faces. This needs no external data at
-all: run speed scales both axes equally and cancels out, so mounts, buffs and
-swimming make no difference, and because the facing is known the result does not
-depend on which way you happened to run either.
-
-Consequence: direction is now correct, distance is still approximate. Good enough
-for "which way did I come from", not good enough to navigate by.
+Consequence: the minimap uses one scale for both axes, so distances can be off by
+roughly ±30% in unusually large or small zones, and in zones that are not square
+(Icecrown is about 3:2) the *direction* of a dot is skewed as well, not just its
+distance. Good enough for "roughly which way did I come from", not good enough to
+navigate by.
 
 The world map layer has no such problem — it is exact, because it works in the
 same coordinate space the API reports.
 
-### Zone shape calibration
-
-A new zone needs a few seconds of ordinary movement before its shape is known.
-Running due north/south or due east/west tells the addon nothing about the other
-axis, so it deliberately waits rather than guessing; any other heading works,
-including one long diagonal run. Steps where you did not move the way you face
-(strafing, backpedalling, turning mid-step) are ignored, and the measurement only
-locks once its own steps agree with each other.
-
-**The measurement is taken once and then locked permanently.** It is never
-refined afterwards. This is deliberate: an estimate that kept adjusting itself
-would shift the whole trail underfoot every time it changed, which is exactly the
-kind of drift the live anchoring and rotation easing above exist to eliminate.
-The trade is one small correction at the moment a zone locks, in exchange for a
-trail that is perfectly stable from then on.
-
-Locked ratios are saved, so a relog does not start the measurement over.
-
-```
-/tmp status      shows whether this zone is locked, measuring, or unmeasured
-/tmp calibrate   forget this zone's shape and measure it again
-```
-
-`/tmp reset` also clears every locked ratio along with the other settings.
+To make the minimap exact, drop in Astrolabe and replace
+`estimateYardsPerUnit()` in `Minimap.lua` with a table lookup. Nothing else
+needs to change.
 
 ### Motion
 
@@ -190,7 +155,7 @@ The runner probes for both `lua5.1`/`luac5.1` (distro packages) and `lua`/`luac`
 (what CI installs), and falls back to `loadfile` for the syntax pass if `luac` is
 missing. Override with `LUA=/path/to/lua`.
 
-Covers syntax on every file plus 116 assertions: the FIFO and ageing model,
+Covers syntax on every file plus 118 assertions: the FIFO and ageing model,
 instance/cosmic/foreign-zone rejection, the stationary-player case, render-layer
 pooling and the alpha gradient, all slash commands, and a 30-minute stress run.
 
@@ -198,15 +163,6 @@ pooling and the alpha gradient, all slash commands, and a 30-minute stress run.
 rigidly with the player rather than drifting and snapping, that rotation easing
 takes the short way round a wrap, that dots fade towards the rim, and that
 standing still skips redraws without freezing the fade.
-
-`test_calibration.lua` pins the zone-shape measurement: that a known 3:2 zone is
-recovered from simulated movement, that a straight-line run refuses to lock, that
-that a path leaning heavily one way (mostly east in a square zone) still measures
-the zone and not the path, that strafing and backpedalling are ignored, that steps
-without a facing collect nothing, that `/tmp reset` discards a measurement in
-progress, that a locked ratio never changes no matter how much contradictory
-movement follows, that a locked zone renders bit-identical frames, and that absurd
-measurements are rejected rather than baked in.
 
 ## Building
 
