@@ -40,6 +40,19 @@ local function status()
 		db.showMinimap and "on" or "off"))
 	print_(string.format("samples: %d across %d zone(s) | cap %d",
 		TMP.Trail:TotalCount(), TMP.Trail:ActiveZoneCount(), db.maxSamples))
+
+	-- Minimap aspect calibration for the zone the player is actually in.
+	local mapID = TMP:GetPlayerMapID()
+	if mapID then
+		local state, value = TMP:GetAspectState(mapID)
+		if state == "locked" then
+			print_(string.format("zone shape: |cff00ff00locked|r at %.3f (h/w)", value))
+		elseif state == "measuring" then
+			print_(string.format("zone shape: measuring (%d steps)", value))
+		else
+			print_("zone shape: not yet measured - move around a little")
+		end
+	end
 end
 
 local function usage()
@@ -52,6 +65,7 @@ local function usage()
 	print_("  /tmp minimap    - toggle the minimap trail")
 	print_("  /tmp worldmap   - toggle the world map trail")
 	print_("  /tmp clear      - erase the recorded trail")
+	print_("  /tmp calibrate  - re-measure this zone's shape")
 	print_("  /tmp reset      - restore default settings")
 	print_("  /tmp status     - show current state")
 end
@@ -117,6 +131,16 @@ local function handler(input)
 		TMP.Trail:Clear()
 		redraw()
 		print_("trail cleared")
+
+	elseif cmd == "calibrate" then
+		local mapID = TMP:GetPlayerMapID()
+		if not mapID then
+			print_("cannot tell which zone you are in right now")
+		else
+			TMP:ResetAspect(mapID)
+			redraw()
+			print_("zone shape cleared - walk around to measure it again")
+		end
 
 	elseif cmd == "reset" then
 		TMP:ResetConfig()
