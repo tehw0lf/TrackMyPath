@@ -29,6 +29,7 @@ jobs:
       id-token: write        # required throughout
       security-events: write # SARIF uploads from security scanning
       pull-requests: write   # npm-audit-autofix
+      issues: write          # security-scan-source failure_issue
     with:
       # Lua is provisioned as a toolchain; `bash` stays the dispatcher, since the
       # tool input is prefixed onto every script command.
